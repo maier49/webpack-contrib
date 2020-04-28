@@ -3,14 +3,16 @@ import * as fs from 'fs-extra';
 import * as glob from 'glob';
 import * as mkdir from 'mkdirp';
 import * as analyzer from './analyzer';
+import { findLargestPackage } from './parseUtils';
 
+const search = require('libnpmsearch');
 export interface ReportDataOptions {
 	reportFilename: string;
 	bundleDir: string | null;
 	excludeBundle: string;
 }
 
-export function generateReportData(bundleStats: any, opts: Partial<ReportDataOptions> = {}) {
+export async function generateReportData(bundleStats: any, opts: Partial<ReportDataOptions> = {}) {
 	const { reportFilename = 'report.html', bundleDir = null, excludeBundle } = opts;
 
 	let excludeBundleRegex: RegExp;
@@ -35,15 +37,19 @@ export function generateReportData(bundleStats: any, opts: Partial<ReportDataOpt
 		bundleContent[bundleFilename] = data;
 		return bundleContent;
 	}, {});
+	const dependencies = await generatePackageData(chartData);
 
 	const reporterFiles = glob.sync(path.join(__dirname, 'reporter', '**', '*.*'));
 	let bundleContentFileName = 'bundleContent.js';
 	let bundleListFileName = 'bundleList.js';
+	let dependencyInfoFileName = 'packageInfo.js';
 	reporterFiles.forEach((file) => {
 		if (file.indexOf('bundleContent') > -1) {
 			bundleContentFileName = path.parse(file).base;
 		} else if (file.indexOf('bundleList') > -1) {
 			bundleListFileName = path.parse(file).base;
+		} else if (file.indexOf('packageInfo') > -1) {
+			dependencyInfoFileName = path.parse(file).base;
 		} else {
 			fs.copySync(
 				file,
@@ -63,6 +69,10 @@ export function generateReportData(bundleStats: any, opts: Partial<ReportDataOpt
 		path.join(path.dirname(reportFilePath), 'analyzer', bundleContentFileName),
 		`window.__bundleList = ${JSON.stringify(bundlesList)}`
 	);
+	fs.writeFileSync(
+		path.join(path.dirname(reportFilePath), 'analyzer', dependencyInfoFileName),
+		`window.__packageInfo = ${JSON.stringify(dependencies)}`
+	);
 
 	return chartData.reduce(
 		(chunkMap, bundleData: any) => {
@@ -74,5 +84,30 @@ export function generateReportData(bundleStats: any, opts: Partial<ReportDataOpt
 			return chunkMap;
 		},
 		{} as { [index: string]: any }
+	);
+}
+
+export async function generatePackageData(chartData: any[]) {
+	const basePath = process.cwd();
+	const packageJsonPath = path.join(basePath, 'package.json');
+	const packageJson = fs.existsSync(packageJsonPath) ? require(packageJsonPath) : {};
+	const packageDeps = packageJson.dependencies || {};
+	const packageSizeData: { [dependencyName: string]: { size: number; name: string } } = {};
+	chartData.forEach((data: any) => {
+		findLargestPackage(data, packageSizeData);
+	});
+
+	return Promise.all(
+		Object.keys(packageSizeData).map(async (key) => {
+			const results = (await search(key)).filter(({ name }: { name: string }) => name === key);
+			const [{ version: latest = 'Package not found' } = { version: 'Package not found' }] = results;
+
+			return {
+				...(packageSizeData[key] || {}),
+				name: key,
+				target: packageDeps[key],
+				latest
+			};
+		})
 	);
 }

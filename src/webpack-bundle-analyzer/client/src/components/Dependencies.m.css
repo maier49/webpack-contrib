@@ -1,0 +1,17 @@
+.root {}
+
+.select {
+	width: calc(var(--grid-base) * 20);
+}
+
+.detail {
+	padding-right: calc(var(--grid-base) * 2);
+}
+
+.list {
+	list-style: none;
+}
+
+.listElement {
+	margin-bottom: var(--grid-base);
+}

@@ -1,5 +1,7 @@
 {
-	"build-app": {},
+	"build-app": {
+		"base": "."
+	},
 	"test-intern": {},
 	"create-app": {}
 }

@@ -1,6 +1,7 @@
 import { dom, create } from '@dojo/framework/core/vdom';
 import cache from '@dojo/framework/core/middleware/cache';
 import * as d3 from 'd3';
+import Linear = d3.scale.Linear;
 
 import * as css from './Sunburst.m.css';
 
@@ -11,7 +12,26 @@ interface SunburstProperties {
 
 const factory = create({ cache }).properties<SunburstProperties>();
 
-export const Sunburst = factory(function S({ middleware: { cache }, properties: { chartData, onHover } }) {
+function arcTween(d: any, arc: (d: any) => any, radius: number, x: Linear<number, number>, y: Linear<number, number>) {
+	const xd = d3.interpolate(x.domain(), [d.x, d.x + d.dx]);
+	const yd = d3.interpolate(y.domain(), [d.y, 1]);
+	const yr = d3.interpolate(y.range(), [d.y ? 20 : 0, radius]);
+
+	return (d: any, i: any) => {
+		return i
+			? () => {
+					return arc(d);
+			  }
+			: (t: any) => {
+					x.domain(xd(t));
+					y.domain(yd(t)).range(yr(t));
+					return arc(d);
+			  };
+	};
+}
+
+export const Sunburst = factory(function S({ middleware: { cache }, properties }) {
+	const { chartData, onHover } = properties();
 	let sunburst = cache.get('sunburst');
 	if (!sunburst) {
 		sunburst = document.createElement('div');
@@ -53,24 +73,6 @@ export const Sunburst = factory(function S({ middleware: { cache }, properties: 
 			.innerRadius((d: any) => Math.max(0, y(d.y)))
 			.outerRadius((d: any) => Math.max(0, y(d.y + d.dy)));
 
-		function arcTween(d: any) {
-			const xd = d3.interpolate(x.domain(), [d.x, d.x + d.dx]);
-			const yd = d3.interpolate(y.domain(), [d.y, 1]);
-			const yr = d3.interpolate(y.range(), [d.y ? 20 : 0, radius]);
-
-			return (d: any, i: any) => {
-				return i
-					? () => {
-							return arc(d);
-					  }
-					: (t: any) => {
-							x.domain(xd(t));
-							y.domain(yd(t)).range(yr(t));
-							return arc(d);
-					  };
-			};
-		}
-
 		const path = svg
 			.selectAll('path')
 			.data(partition.nodes(chartData))
@@ -81,7 +83,7 @@ export const Sunburst = factory(function S({ middleware: { cache }, properties: 
 			.on('click', (d: any) => {
 				path.transition()
 					.duration(750)
-					.attrTween('d', arcTween(d));
+					.attrTween('d', arcTween(d, arc, radius, x, y));
 			})
 			.on('mouseover', (d: any) => {
 				onHover(d);

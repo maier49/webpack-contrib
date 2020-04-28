@@ -6,16 +6,15 @@
 		"build:dist": "npm install && dojo build"
 	},
 	"dependencies": {
-		"@dojo/framework": "6.0.0-alpha.8",
-		"@dojo/widgets": "6.0.0-alpha.4",
-		"@dojo/themes": "^5.0.0",
+		"@dojo/framework": "7.0.0-rc.2",
+		"@dojo/widgets": "7.0.0-rc.1",
 		"d3": "3.5.17",
 		"filesize": "3.5.11",
 		"tslib": "1.9.1"
 	},
 	"devDependencies": {
-		"@dojo/cli": "~5.0.0",
-		"@dojo/cli-build-app": "6.0.0-alpha.5",
+		"@dojo/cli": "^7.0.0-rc.1",
+		"@dojo/cli-build-app": "^7.0.0-rc.1",
 		"@types/d3": "~3.5.17",
 		"@types/filesize": "3.6.0",
 		"@types/node": "9.6.5",

@@ -60,9 +60,8 @@ export function parseBundle(bundlePath: any) {
 	};
 }
 
-export function findLargestPackage(module: any) {
+export function findLargestPackage(module: any, dependenciesMap: { [packageName: string]: any } = {}) {
 	const groupModule = module.groups.find(({ label }: any) => label === 'node_modules');
-	let dependenciesMap: { [packageName: string]: any } = {};
 	if (groupModule) {
 		const leafNodes = getLeafNodes(groupModule);
 		leafNodes.forEach(({ path, parsedSize, statSize }: any) => {
