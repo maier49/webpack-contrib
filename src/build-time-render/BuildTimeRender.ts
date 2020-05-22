@@ -138,6 +138,8 @@ export default class BuildTimeRender {
 	private _writtenHtmlFiles: string[] = [];
 	private _initialBtr = true;
 	private _onDemand = false;
+	private _legacyBootstrapHash = '';
+	private _legacyBootstrapContent = '';
 	private _headNodes: string[] = [];
 	private _excludedPaths: string[] = [];
 
@@ -540,7 +542,7 @@ ${blockCacheEntry}`
 							currentBootstrapHash,
 							newBootstrapHash
 						);
-						const blockChunkName = `runtime/blocks.${newBlockHash}.bundle.js`;
+						const blockChunkName = `runtime/blocks.${newBlockHash}.modern.bundle.js`;
 						this._manifest['bootstrap.js'] = bootstrapChunkName;
 						this._manifest[blockChunk] = blockChunkName;
 						this._updateHTML(currentBootstrapHash, newBootstrapHash);
@@ -554,6 +556,19 @@ ${blockCacheEntry}`
 						if (additionalScriptIndex !== -1) {
 							additionalScripts[additionalScriptIndex] = blockChunkName;
 						}
+
+						// update legacy bootstrap
+						this._legacyBootstrapContent = this._legacyBootstrapContent.replace(
+							chunkMarker,
+							`${chunkMarker}"${chunkName}":"${blockResultChunkHash}",`
+						);
+						this._legacyBootstrapContent = this._legacyBootstrapContent.replace(
+							currentBlockHash,
+							newBlockHash
+						);
+						const newHash = genHash(this._legacyBootstrapContent);
+						this._updateHTML(this._legacyBootstrapHash, newHash);
+						this._legacyBootstrapHash = newHash;
 					}
 					this._manifestContent[`${chunkName}.js`] = blockResultChunk;
 					this._filesToWrite.add(blockChunk);
@@ -578,6 +593,10 @@ ${blockCacheEntry}`
 				this._filesToRemove.add(this._manifest[name]);
 				outputFileSync(join(this._output!, this._manifest[name]), this._manifestContent[name], 'utf-8');
 			});
+
+			const legacyBootstrapFilename = `bootstrap.${this._legacyBootstrapHash}.bundle.js`;
+			console.error('Legacy bootstrap filename: ', legacyBootstrapFilename);
+			outputFileSync(join(this._output!, legacyBootstrapFilename), this._legacyBootstrapContent, 'utf-8');
 
 			this._filesToWrite = new Set();
 		}
@@ -816,6 +835,16 @@ ${blockCacheEntry}`
 			if (this._onDemand && !this._initialBtr) {
 				return callback();
 			}
+
+			Object.keys(compilation.assets).forEach((name) => {
+				if (/^bootstrap.*\.js$/.test(name) && name.indexOf('modern') === -1) {
+					this._legacyBootstrapContent = compilation.assets[name].source();
+					this._legacyBootstrapHash = name.replace('bootstrap.', '').replace(/([^.]*)(\.bundle)?\.js$/, '$1');
+
+					console.error(`Found legacy bootstrap ${name} with hash ${this._legacyBootstrapHash}`);
+				}
+			});
+
 			return this._run(compilation, callback);
 		});
 	}
