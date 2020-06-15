@@ -137,25 +137,26 @@ export default class BabelEsmPlugin {
 					if (childCompilation.errors.length > 0) {
 						return childProcessDone(childCompilation.errors[0]);
 					}
+					compilation.hooks.afterOptimizeAssets.tap(PLUGIN_NAME, () => {
+						compilation.assets = Object.assign(childCompilation.assets, compilation.assets);
 
-					compilation.assets = Object.assign(childCompilation.assets, compilation.assets);
+						compilation.namedChunkGroups = Object.assign(
+							childCompilation.namedChunkGroups,
+							compilation.namedChunkGroups
+						);
 
-					compilation.namedChunkGroups = Object.assign(
-						childCompilation.namedChunkGroups,
-						compilation.namedChunkGroups
-					);
+						const childChunkFileMap = childCompilation.chunks.reduce((chunkMap: any, chunk: any) => {
+							chunkMap[chunk.name] = chunk.files;
+							return chunkMap;
+						}, {});
 
-					const childChunkFileMap = childCompilation.chunks.reduce((chunkMap: any, chunk: any) => {
-						chunkMap[chunk.name] = chunk.files;
-						return chunkMap;
-					}, {});
+						compilation.chunks.forEach((chunk: any) => {
+							const childChunkFiles = childChunkFileMap[chunk.name];
 
-					compilation.chunks.forEach((chunk: any) => {
-						const childChunkFiles = childChunkFileMap[chunk.name];
-
-						if (childChunkFiles) {
-							chunk.files.push(...childChunkFiles.filter((v: any) => !chunk.files.includes(v)));
-						}
+							if (childChunkFiles) {
+								chunk.files.push(...childChunkFiles.filter((v: any) => !chunk.files.includes(v)));
+							}
+						});
 					});
 
 					childProcessDone();
