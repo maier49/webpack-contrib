@@ -1,6 +1,7 @@
 const deepcopy = require('deepcopy');
 const SingleEntryPlugin = require('webpack/lib/SingleEntryPlugin');
 const MultiEntryPlugin = require('webpack/lib/MultiEntryPlugin');
+const ExternalsPlugin = require('webpack/lib/ExternalsPlugin');
 const JsonpTemplatePlugin = require('webpack/lib/web/JsonpTemplatePlugin');
 const SplitChunksPlugin = require('webpack/lib/optimize/SplitChunksPlugin');
 const RuntimeChunkPlugin = require('webpack/lib/optimize/RuntimeChunkPlugin');
@@ -99,6 +100,12 @@ export default class BabelEsmPlugin {
 						childCompiler
 					);
 				}
+			}
+
+			if (compiler.options.externals) {
+				new ExternalsPlugin(compiler.options.output.libraryTarget, compiler.options.externals).apply(
+					childCompiler
+				);
 			}
 
 			compilation.hooks.additionalAssets.tapAsync(PLUGIN_NAME, (childProcessDone: any) => {
