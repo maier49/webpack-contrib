@@ -5,6 +5,7 @@ const ExternalsPlugin = require('webpack/lib/ExternalsPlugin');
 const JsonpTemplatePlugin = require('webpack/lib/web/JsonpTemplatePlugin');
 const SplitChunksPlugin = require('webpack/lib/optimize/SplitChunksPlugin');
 const RuntimeChunkPlugin = require('webpack/lib/optimize/RuntimeChunkPlugin');
+const LibraryTemplatePlugin = require('webpack/lib/LibraryTemplatePlugin');
 
 const { makeESMPresetOptions, getBabelLoaderOptions } = require('./babel-utils');
 
@@ -102,6 +103,15 @@ export default class BabelEsmPlugin {
 				}
 			}
 
+			if (compiler.options.output.library || compiler.options.output.libraryTarget !== 'var') {
+				new LibraryTemplatePlugin(
+					compiler.options.output.library,
+					compiler.options.output.libraryTarget,
+					compiler.options.output.umdNamedDefine,
+					compiler.options.output.auxiliaryComment || '',
+					compiler.options.output.libraryExport
+				).apply(childCompiler);
+			}
 			if (compiler.options.externals) {
 				new ExternalsPlugin(compiler.options.output.libraryTarget, compiler.options.externals).apply(
 					childCompiler
