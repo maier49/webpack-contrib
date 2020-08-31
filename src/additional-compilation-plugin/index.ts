@@ -7,24 +7,65 @@ const SplitChunksPlugin = require('webpack/lib/optimize/SplitChunksPlugin');
 const RuntimeChunkPlugin = require('webpack/lib/optimize/RuntimeChunkPlugin');
 const LibraryTemplatePlugin = require('webpack/lib/LibraryTemplatePlugin');
 
-const { makeESMPresetOptions, getBabelLoaderOptions } = require('./babel-utils');
-
-const PLUGIN_NAME = 'BabelEsmPlugin';
+const PLUGIN_NAME = 'AdditionalCompilationPlugin';
 const FILENAME = '[name].es6.js';
 const CHUNK_FILENAME = '[id].es6.js';
 
-export default class BabelEsmPlugin {
-	options: any;
-	babelLoaderConfigOptions: any;
-	newConfigOptions: any;
+/**
+ * Returns a ref to matching loader configs
+ */
+const getLoaders = (config: any, loaderName: string) => {
+	let loaderConfig: any[] = [];
+	config.module.rules.forEach((rule: any) => {
+		if (rule.use && Array.isArray(rule.use)) {
+			rule.use.forEach((rule: any) => {
+				if (rule.loader && rule.loader === loaderName) {
+					loaderConfig.push(rule);
+				}
+			});
+		} else if (
+			(rule.use && rule.use.loader && rule.use.loader === loaderName) ||
+			(rule.loader && rule.loader === loaderName)
+		) {
+			loaderConfig.push(rule.use || rule);
+		}
+	});
+	if (!loaderConfig.length) {
+		throw new Error(`${loaderName} loader config not found!!!`);
+	} else {
+		return loaderConfig;
+	}
+};
 
-	constructor(options: any) {
+const changeRule = (config: any, matcher: (rule: any) => boolean, use: any) => {
+	config.module.rules.forEach((rule: any) => {
+		if (matcher(rule) && Array.isArray(rule.use)) {
+			rule.use = use;
+		}
+	});
+};
+
+export interface AdditionalCompilationPluginOptions {
+	filename?: string;
+	chunkFilename?: string;
+	excludedPlugins?: string[];
+	additionalPlugins?: any[];
+	loaderOptions?: { name: string; optionCallback(options: any): any }[];
+	ruleOptions?: { matcher(rule: any): boolean; use: any }[];
+}
+
+export default class AdditionalCompilationPlugin {
+	public options: Required<AdditionalCompilationPluginOptions>;
+
+	constructor(options: AdditionalCompilationPluginOptions) {
 		this.options = Object.assign(
 			{
 				filename: FILENAME,
 				chunkFilename: CHUNK_FILENAME,
 				excludedPlugins: [PLUGIN_NAME],
-				additionalPlugins: []
+				additionalPlugins: [],
+				loaderOptions: [],
+				ruleOptions: []
 			},
 			options
 		);
@@ -33,8 +74,6 @@ export default class BabelEsmPlugin {
 	apply(compiler: any) {
 		compiler.hooks.make.tapAsync(PLUGIN_NAME, async (compilation: any, callback: any) => {
 			const outputOptions = deepcopy(compiler.options);
-			this.babelLoaderConfigOptions = getBabelLoaderOptions(outputOptions);
-			this.newConfigOptions = makeESMPresetOptions(this.babelLoaderConfigOptions);
 			outputOptions.output.filename = this.options.filename;
 			outputOptions.output.chunkFilename = this.options.chunkFilename;
 			let plugins = (compiler.options.plugins || []).filter(
@@ -45,7 +84,7 @@ export default class BabelEsmPlugin {
 			plugins = plugins.concat(this.options.additionalPlugins);
 
 			/**
-			 * We are deliberatly not passing plugins in createChildCompiler.
+			 * We are deliberately not passing plugins in createChildCompiler.
 			 * All webpack does with plugins is to call `apply` method on them
 			 * with the childCompiler.
 			 * But by then we haven't given childCompiler a fileSystem or other options
@@ -53,7 +92,6 @@ export default class BabelEsmPlugin {
 			 * We do call the `apply` method of all plugins by ourselves later in the code
 			 */
 			const childCompiler = compilation.createChildCompiler(PLUGIN_NAME, outputOptions.output);
-
 			childCompiler.context = compiler.context;
 			childCompiler.inputFileSystem = compiler.inputFileSystem;
 			childCompiler.outputFileSystem = compiler.outputFileSystem;
@@ -119,25 +157,17 @@ export default class BabelEsmPlugin {
 			}
 
 			compilation.hooks.additionalAssets.tapAsync(PLUGIN_NAME, (childProcessDone: any) => {
-				let babelLoader;
-				childCompiler.options.module.rules.forEach((rule: any, index: any) => {
-					if (rule.use) {
-						const use = Array.isArray(rule.use) ? rule.use : [rule.use];
-						rule.use = use.filter((loader: any) => {
-							if (loader && loader.loader === 'babel-loader') {
-								return false;
-							}
-							return true;
-						});
-					}
+				this.options.ruleOptions.forEach(({ matcher, use }) => {
+					changeRule(childCompiler.options, matcher, use);
 				});
 
-				this.options.beforeStartExecution &&
-					this.options.beforeStartExecution(plugins, (babelLoader || ({} as any)).options);
+				this.options.loaderOptions.forEach(({ name, optionCallback }) => {
+					const loaders = getLoaders(childCompiler.options, name);
+					loaders.forEach((loader: any) => {
+						loader.options = optionCallback(loader.options);
+					});
+				});
 
-				/*
-					 * Copy over the parent compilation hash, see issue#15.
-					 */
 				childCompiler.hooks.make.tapAsync(PLUGIN_NAME, (childCompilation: any, callback: any) => {
 					childCompilation.hooks.afterHash.tap(PLUGIN_NAME, () => {
 						childCompilation.hash = compilation.hash;
