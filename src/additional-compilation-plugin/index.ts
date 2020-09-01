@@ -92,6 +92,17 @@ export default class AdditionalCompilationPlugin {
 			 * We do call the `apply` method of all plugins by ourselves later in the code
 			 */
 			const childCompiler = compilation.createChildCompiler(PLUGIN_NAME, outputOptions.output);
+			childCompiler.options.module = outputOptions.module;
+			this.options.ruleOptions.forEach(({ matcher, use }) => {
+				changeRule(childCompiler.options, matcher, use);
+			});
+
+			this.options.loaderOptions.forEach(({ name, optionCallback }) => {
+				const loaders = getLoaders(childCompiler.options, name);
+				loaders.forEach((loader: any) => {
+					loader.options = optionCallback(loader.options);
+				});
+			});
 			childCompiler.context = compiler.context;
 			childCompiler.inputFileSystem = compiler.inputFileSystem;
 			childCompiler.outputFileSystem = compiler.outputFileSystem;
@@ -157,17 +168,6 @@ export default class AdditionalCompilationPlugin {
 			}
 
 			compilation.hooks.additionalAssets.tapAsync(PLUGIN_NAME, (childProcessDone: any) => {
-				this.options.ruleOptions.forEach(({ matcher, use }) => {
-					changeRule(childCompiler.options, matcher, use);
-				});
-
-				this.options.loaderOptions.forEach(({ name, optionCallback }) => {
-					const loaders = getLoaders(childCompiler.options, name);
-					loaders.forEach((loader: any) => {
-						loader.options = optionCallback(loader.options);
-					});
-				});
-
 				childCompiler.hooks.make.tapAsync(PLUGIN_NAME, (childCompilation: any, callback: any) => {
 					childCompilation.hooks.afterHash.tap(PLUGIN_NAME, () => {
 						childCompilation.hash = compilation.hash;
